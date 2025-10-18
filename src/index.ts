@@ -2,7 +2,7 @@ import express from "express";
 import cors from "cors";
 import { MCPStockfish } from "./engine/MCPStockfish.js";
 import { EnginePool } from "./engine/pool.js";
-import { formatStockfishPositionEval } from "./engine/format.js";
+import { formatEvaluation, formatStockfishPositionEval } from "./engine/format.js";
 
 const app = express();
 
@@ -76,6 +76,7 @@ app.post("/bestmove", async (req, res) => {
     res.json({
       success: true,
       bestMove: cleanedResult.bestmove,
+      evaluation: formatEvaluation(result.lines[0])
     });
   } catch (error) {
     console.error("Best move error:", error);
