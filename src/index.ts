@@ -3,6 +3,7 @@ import cors from "cors";
 import { MCPStockfish } from "./engine/MCPStockfish.js";
 import { EnginePool } from "./engine/pool.js";
 import { formatEvaluation, formatStockfishPositionEval } from "./engine/format.js";
+import { checkFenInAllDatabases, isFenInAllDatabases } from "./openingdatabase/ecoDatabase.js";
 
 const app = express();
 
@@ -52,6 +53,28 @@ app.post("/evaluate", async (req, res) => {
     }
   }
 });
+
+app.post("/book", async (req, res) => {
+  try {
+    const { fen} = req.body;
+
+    if (!fen) {
+      return res.status(400).json({ error: "FEN is required" });
+    }
+
+    const book = checkFenInAllDatabases(fen);
+    res.json({
+      success: true,
+      book: book
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  } 
+});
+
 
 // Best move endpoint
 app.post("/bestmove", async (req, res) => {
