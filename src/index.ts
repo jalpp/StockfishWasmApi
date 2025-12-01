@@ -3,7 +3,7 @@ import cors from "cors";
 import { MCPStockfish } from "./engine/MCPStockfish.js";
 import { EnginePool } from "./engine/pool.js";
 import { formatEvaluation, formatStockfishPositionEval } from "./engine/format.js";
-import { checkFenInAllDatabases, isFenInAllDatabases } from "./openingdatabase/ecoDatabase.js";
+import { checkFenInAllDatabases } from "./openingdatabase/ecoDatabase.js";
 
 const app = express();
 
