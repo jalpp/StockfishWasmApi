@@ -8,7 +8,6 @@ RUN npm ci
 
 # Copy source and models
 COPY src ./src
-COPY models ./models
 COPY tsconfig*.json ./
 
 # Build the project and remove dev dependencies
