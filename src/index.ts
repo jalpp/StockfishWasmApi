@@ -54,8 +54,8 @@ app.post("/evaluate", async (req, res) => {
   }
 });
 
-// raw eval
-app.post("/raweval", async (req, res) => {
+// raw position eval for given position
+app.post("/positioneval", async (req, res) => {
   let engine: MCPStockfish | null = null;
   try {
     const { fen, depth = 15, multiPv = 1 } = req.body;
