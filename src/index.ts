@@ -13,7 +13,7 @@ app.use(express.json());
 const enginePool = new EnginePool();
 
 // Health check endpoint
-app.get("/health", (req, res) => {
+app.get("/health", (_req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
@@ -40,6 +40,41 @@ app.post("/evaluate", async (req, res) => {
     res.json({
       success: true,
       data: cleanedResult,
+    });
+  } catch (error) {
+    console.error("Evaluation error:", error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  } finally {
+    if (engine) {
+      enginePool.releaseEngine(engine);
+    }
+  }
+});
+
+// raw eval
+app.post("/raweval", async (req, res) => {
+  let engine: MCPStockfish | null = null;
+  try {
+    const { fen, depth = 15, multiPv = 1 } = req.body;
+
+    if (!fen) {
+      return res.status(400).json({ error: "FEN is required" });
+    }
+
+    engine = await enginePool.getEngine();
+
+    const result = await engine.evaluatePositionWithUpdate({
+      fen,
+      depth,
+      multiPv,
+    });
+
+    res.json({
+      success: true,
+      data: result
     });
   } catch (error) {
     console.error("Evaluation error:", error);
