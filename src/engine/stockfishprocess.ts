@@ -11,7 +11,7 @@ export class StockfishProcess {
     constructor() {
         const enginePath = path.join(
             __dirname,
-            "../../node_modules/stockfish/src/stockfish-17.1-lite-single-03e3232.js"
+            "../../node_modules/stockfish/bin/stockfish-18-lite.js"
         );
 
         this.engine = spawn(process.execPath, [enginePath], { 

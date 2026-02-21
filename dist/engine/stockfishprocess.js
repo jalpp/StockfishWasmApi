@@ -6,7 +6,7 @@ const __dirname = path.dirname(__filename);
 export class StockfishProcess {
     engine;
     constructor() {
-        const enginePath = path.join(__dirname, "../../node_modules/stockfish/src/stockfish-17.1-lite-single-03e3232.js");
+        const enginePath = path.join(__dirname, "../../node_modules/stockfish/bin/stockfish-18-lite.js");
         this.engine = spawn(process.execPath, [enginePath], {
             stdio: "pipe",
             env: {
