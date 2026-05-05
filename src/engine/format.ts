@@ -4,6 +4,7 @@ import { Chess } from "chess.js";
 interface FormatResponse {
     bestmove: string;
     lines: string[];
+    isNullMovePosition?: boolean;
 }
 
 export interface EvaluationRequest {
@@ -13,7 +14,7 @@ export interface EvaluationRequest {
 }
 
 
-export const formatStockfishPositionEval = (fen: string, data: PositionEval): FormatResponse => {
+export const formatStockfishPositionEval = (fen: string, data: PositionEval, isNullMove: boolean | undefined): FormatResponse => {
 
     const chess = new Chess(fen);
 
@@ -27,7 +28,8 @@ export const formatStockfishPositionEval = (fen: string, data: PositionEval): Fo
 
     return {
         bestmove: chess.history({verbose: true})[0].san,
-        lines: lines
+        lines: lines,
+        isNullMovePosition: isNullMove
     }
 
 

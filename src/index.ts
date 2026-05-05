@@ -4,6 +4,7 @@ import { MCPStockfish } from "./engine/MCPStockfish.js";
 import { EnginePool } from "./engine/pool.js";
 import { formatEvaluation, formatStockfishPositionEval } from "./engine/format.js";
 import { checkFenInAllDatabases } from "./openingdatabase/ecoDatabase.js";
+import { flipNullMoveFen } from "./engine/parseResults.js";
 
 const app = express();
 
@@ -21,21 +22,22 @@ app.get("/health", (_req, res) => {
 app.post("/evaluate", async (req, res) => {
   let engine: MCPStockfish | null = null;
   try {
-    const { fen, depth = 15, multiPv = 1 } = req.body;
+    const { fen, depth = 15, multiPv = 1, nullMove = false } = req.body;
 
     if (!fen) {
       return res.status(400).json({ error: "FEN is required" });
     }
 
+    let evalFen = flipNullMoveFen(fen, nullMove);
     engine = await enginePool.getEngine();
 
     const result = await engine.evaluatePositionWithUpdate({
-      fen,
+      fen: evalFen,
       depth,
       multiPv,
     });
 
-    const cleanedResult = formatStockfishPositionEval(fen, result);
+    const cleanedResult = formatStockfishPositionEval(evalFen, result, nullMove);
 
     res.json({
       success: true,
@@ -58,7 +60,7 @@ app.post("/evaluate", async (req, res) => {
 app.post("/positioneval", async (req, res) => {
   let engine: MCPStockfish | null = null;
   try {
-    const { fen, depth = 15, multiPv = 1 } = req.body;
+    const { fen, depth = 15, multiPv = 1, nullMove = false } = req.body;
 
     if (!fen) {
       return res.status(400).json({ error: "FEN is required" });
@@ -66,8 +68,10 @@ app.post("/positioneval", async (req, res) => {
 
     engine = await enginePool.getEngine();
 
+    let evalFen = flipNullMoveFen(fen, nullMove);
+
     const result = await engine.evaluatePositionWithUpdate({
-      fen,
+      fen: evalFen,
       depth,
       multiPv,
     });
@@ -115,21 +119,22 @@ app.post("/book", async (req, res) => {
 app.post("/bestmove", async (req, res) => {
   let engine: MCPStockfish | null = null;
   try {
-    const { fen, depth = 15 } = req.body;
+    const { fen, depth = 15, nullMove = false } = req.body;
 
     if (!fen) {
       return res.status(400).json({ error: "FEN is required" });
     }
 
+    let evalFen = flipNullMoveFen(fen, nullMove);
     engine = await enginePool.getEngine();
 
     const result = await engine.evaluatePositionWithUpdate({
-      fen,
+      fen: evalFen,
       depth,
       multiPv: 1,
     });
 
-    const cleanedResult = formatStockfishPositionEval(fen, result);
+    const cleanedResult = formatStockfishPositionEval(evalFen, result, nullMove);
 
     res.json({
       success: true,
@@ -168,7 +173,7 @@ app.post("/analyze-batch", async (req, res) => {
         depth: pos.depth || depth,
         multiPv: pos.multiPv || 1,
       });
-      const cleanedResult = formatStockfishPositionEval(pos.fen, result);
+      const cleanedResult = formatStockfishPositionEval(pos.fen, result, undefined);
       results.push({
         fen: pos.fen,
         result: cleanedResult,
