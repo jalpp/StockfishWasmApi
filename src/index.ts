@@ -60,6 +60,49 @@ app.post("/evaluate", async (req, res) => {
   }
 });
 
+app.post('/expandqueue', async (req, res) => {
+  try {
+    const { fen, expansionDepth, expansionWidth, maxPositionsQueued } = req.body;
+ 
+    if (!fen) {
+      return res.status(400).json({ error: 'FEN is required' });
+    }
+ 
+    const toPositiveInt = (v: unknown, label: string, max: number) => {
+      if (v === undefined) return undefined;
+      const n = Number(v);
+      if (isNaN(n) || n < 1 || !Number.isInteger(n)) {
+        throw new Error(`${label} must be a positive integer (max ${max})`);
+      }
+      return n;
+    };
+ 
+    const depthNum  = toPositiveInt(expansionDepth,     'expansionDepth',     10);
+    const widthNum  = toPositiveInt(expansionWidth,     'expansionWidth',      5);
+    const maxQueued = toPositiveInt(maxPositionsQueued, 'maxPositionsQueued', 20);
+ 
+    const result = await expandQueueService.expand({
+      fen,
+      expansionDepth:     depthNum,
+      expansionWidth:     widthNum,
+      maxPositionsQueued: maxQueued,
+    });
+ 
+    res.json({
+      success:          result.success,
+      positionsVisited: result.positionsVisited,
+      positionsQueued:  result.positionsQueued,
+      cappedByLimit:    result.cappedByLimit,
+      queuedFens:       result.queuedFens,
+      ...(result.errors.length > 0 && { errors: result.errors }),
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    res.status(msg.includes('must be') ? 400 : 500).json({ success: false, error: msg });
+  }
+});
+ 
+
 app.get('/expandqueue/stream', async (req, res) => {
   try {
     const { fen, expansionDepth, expansionWidth, maxPositionsQueued } = req.query;
