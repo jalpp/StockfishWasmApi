@@ -1,5 +1,5 @@
 import { Chess } from "chess.js";
-export const formatStockfishPositionEval = (fen, data) => {
+export const formatStockfishPositionEval = (fen, data, isNullMove) => {
     const chess = new Chess(fen);
     chess.move(data.lines[0].pv[0]);
     const lines = [];
@@ -8,7 +8,8 @@ export const formatStockfishPositionEval = (fen, data) => {
     }
     return {
         bestmove: chess.history({ verbose: true })[0].san,
-        lines: lines
+        lines: lines,
+        isNullMovePosition: isNullMove
     };
 };
 export const formatEvaluation = (line) => {
