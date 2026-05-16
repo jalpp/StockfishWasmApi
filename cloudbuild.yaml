@@ -1,5 +1,4 @@
 steps:
-  # Build the container image
   - name: 'gcr.io/cloud-builders/docker'
     args: 
       - 'build'
@@ -9,7 +8,6 @@ steps:
       - 'us-central1-docker.pkg.dev/$PROJECT_ID/stockfishservice/stockfishservice:latest'
       - '.'
 
-  # Push the container image to Artifact Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
@@ -34,6 +32,8 @@ steps:
       - '1Gi'
       - '--cpu'
       - '1'
+      - '--set-env-vars'
+      - 'FIRESTORE_PROJECT_ID=$PROJECT_ID'
 
 
 # Store images in Artifact Registry
