@@ -14,7 +14,6 @@ export interface CachedEvalDocument {
   result: PositionEval;
   createdAt: string;
   lastAccessedAt: string;
-  hitCount: number;
   source: string;
 }
 
@@ -52,11 +51,6 @@ export async function cacheGet(key: CacheKey): Promise<PositionEval | null> {
     const snap = await db.collection(COLLECTION).doc(docId).get();
     if (!snap.exists) return null;
 
-    snap.ref
-      .update({ hitCount: FieldValue.increment(1), lastAccessedAt: new Date().toISOString() })
-      .catch((err) => console.error("[sfCache] hit-stat update failed:", err));
-
-    console.log(`[sfCache] HIT  ${docId}`);
     return (snap.data() as CachedEvalDocument).result;
   } catch (err) {
     console.error("[sfCache] get error:", err);
@@ -76,7 +70,6 @@ export async function cacheSet(key: CacheKey, result: PositionEval, source: stri
       result: sanitize(result),
       createdAt: now,
       lastAccessedAt: now,
-      hitCount: 0,
       source,
     };
     await db.collection(COLLECTION).doc(docId).set(doc, { merge: true });
@@ -144,7 +137,6 @@ export async function cacheSetBatch(
           result: sanitize(result),
           createdAt: now,
           lastAccessedAt: now,
-          hitCount: 0,
           source,
         };
         batch.set(db.collection(COLLECTION).doc(buildDocId(key)), doc, { merge: true });
