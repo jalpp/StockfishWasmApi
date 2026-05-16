@@ -24,14 +24,11 @@ export interface BatchCacheResult {
   result?: PositionEval;
 }
 
-
 const COLLECTION = "sf_cache";
-
 
 const db = new Firestore({
   projectId: process.env.FIRESTORE_PROJECT_ID,
 });
-
 
 /** Strip half-move clock and full-move number so logically identical positions share a key. */
 export function normaliseFen(fen: string): string {
@@ -41,6 +38,11 @@ export function normaliseFen(fen: string): string {
 function buildDocId(key: CacheKey): string {
   const fenPart = normaliseFen(key.fen).replace(/\//g, "|").replace(/ /g, "_");
   return `${fenPart}__d${key.depth}__pv${key.multiPv}`;
+}
+
+
+function sanitize(result: PositionEval): PositionEval {
+  return JSON.parse(JSON.stringify(result));
 }
 
 /** Returns the cached PositionEval or null on a miss. Bumps hit stats async. */
@@ -71,7 +73,7 @@ export async function cacheSet(key: CacheKey, result: PositionEval, source: stri
       fen: normaliseFen(key.fen),
       depth: key.depth,
       multiPv: key.multiPv,
-      result,
+      result: sanitize(result),
       createdAt: now,
       lastAccessedAt: now,
       hitCount: 0,
@@ -139,7 +141,7 @@ export async function cacheSetBatch(
           fen: normaliseFen(key.fen),
           depth: key.depth,
           multiPv: key.multiPv,
-          result,
+          result: sanitize(result),
           createdAt: now,
           lastAccessedAt: now,
           hitCount: 0,
