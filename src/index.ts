@@ -8,6 +8,7 @@ import { flipNullMoveFen } from "./engine/parseResults.js";
 import { ExpandQueueService } from "./engine/expandQueue.js";
 import { PositionEval } from "./engine/engine.js";
 import { cacheGet, cacheSet, cacheGetBatch, cacheSetBatch } from "./engine/sfcache.js";
+import { validateFen as vfen } from "chess.js";
 
 const app = express();
 app.use(cors());
@@ -21,7 +22,8 @@ const expandQueueService = new ExpandQueueService();
 const MAX_DEPTH = 30;
 const MIN_DEPTH = 1;
 const MAX_BATCH_SIZE = 25;
-
+const MAX_MULTI_PV = 5;
+const MIN_MULTI_PV = 1;
 
 function clampDepth(depth: unknown, defaultDepth = 15): number {
   const d = Number(depth);
@@ -31,32 +33,55 @@ function clampDepth(depth: unknown, defaultDepth = 15): number {
 
 function validateMultiPv(multiPv: unknown, defaultVal = 1): number {
   const v = Number(multiPv);
-  if (isNaN(v) || !Number.isInteger(v) || v < 1) return defaultVal;
-  return v;
+  if (isNaN(v) || !Number.isInteger(v)) return defaultVal;
+  return Math.min(Math.max(v, MIN_MULTI_PV), MAX_MULTI_PV);
 }
 
 
+/**
+ * Validates a FEN string using chess.js.
+ * Returns an error message string on failure, or null if the FEN is valid.
+ */
+function validateFen(fen: unknown): string | null {
+  if (!fen || typeof fen !== "string" || fen.trim() === "") {
+    return "FEN is required and must be a non-empty string.";
+  }
+  try {
+    const result = vfen(fen.trim());
+    if (!result.ok) {
+      return `Invalid FEN: ${result.error}`;
+    }
+  } catch {
+    return "Invalid FEN: could not be parsed.";
+  }
+  return null;
+}
+ 
+// ─── Routes ───────────────────────────────────────────────────────────────────
+ 
 app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
-    limits: { maxDepth: MAX_DEPTH, maxBatchSize: MAX_BATCH_SIZE },
+    limits: { maxDepth: MAX_DEPTH, maxBatchSize: MAX_BATCH_SIZE, maxPv: MAX_MULTI_PV },
   });
 });
-
-// ─── /evaluate ────────────────────────────────────────────────────────────────
-
+ 
+ 
 app.post("/evaluate", async (req, res) => {
   let engine: MCPStockfish | null = null;
   try {
     const { fen, nullMove = false } = req.body;
-    if (!fen) return res.status(400).json({ error: "FEN is required" });
-
+ 
+    const fenError = validateFen(fen);
+    if (fenError) return res.status(400).json({ success: false, error: fenError });
+ 
     const depth = clampDepth(req.body.depth);
     const multiPv = validateMultiPv(req.body.multiPv);
+ 
+    const cacheKey = { fen, depth, multiPv, nullMove: Boolean(nullMove) };
     const evalFen = flipNullMoveFen(fen, nullMove);
-    const cacheKey = { fen: evalFen, depth, multiPv };
-
+ 
     const cached = await cacheGet(cacheKey);
     if (cached) {
       return res.json({
@@ -65,12 +90,12 @@ app.post("/evaluate", async (req, res) => {
         cache: { hit: true },
       });
     }
-
+ 
     engine = await enginePool.getEngine();
     const result = await engine.evaluatePositionWithUpdate({ fen: evalFen, depth, multiPv });
-
+ 
     cacheSet(cacheKey, result, "evaluate").catch(() => {});
-
+ 
     return res.json({
       success: true,
       data: formatStockfishPositionEval(evalFen, result, nullMove),
@@ -83,30 +108,32 @@ app.post("/evaluate", async (req, res) => {
     if (engine) enginePool.releaseEngine(engine);
   }
 });
-
-// ─── /positioneval ───────────────────────────────────────────────────────────
-
+ 
+ 
 app.post("/positioneval", async (req, res) => {
   let engine: MCPStockfish | null = null;
   try {
     const { fen, nullMove = false } = req.body;
-    if (!fen) return res.status(400).json({ error: "FEN is required" });
-
+ 
+    const fenError = validateFen(fen);
+    if (fenError) return res.status(400).json({ success: false, error: fenError });
+ 
     const depth = clampDepth(req.body.depth);
     const multiPv = validateMultiPv(req.body.multiPv);
+ 
+    const cacheKey = { fen, depth, multiPv, nullMove: Boolean(nullMove) };
     const evalFen = flipNullMoveFen(fen, nullMove);
-    const cacheKey = { fen: evalFen, depth, multiPv };
-
+ 
     const cached = await cacheGet(cacheKey);
     if (cached) {
       return res.json({ success: true, data: cached, cache: { hit: true } });
     }
-
+ 
     engine = await enginePool.getEngine();
     const result = await engine.evaluatePositionWithUpdate({ fen: evalFen, depth, multiPv });
-
+ 
     cacheSet(cacheKey, result, "positioneval").catch(() => {});
-
+ 
     return res.json({ success: true, data: result, cache: { hit: false } });
   } catch (error) {
     console.error("Evaluation error:", error);
@@ -115,68 +142,83 @@ app.post("/positioneval", async (req, res) => {
     if (engine) enginePool.releaseEngine(engine);
   }
 });
-
-// ─── /analyze-batch ──────────────────────────────────────────────────────────
-
+ 
+ 
 app.post("/analyze-batch", async (req, res) => {
   let engine: MCPStockfish | null = null;
   try {
     const { positions } = req.body;
     if (!Array.isArray(positions)) {
-      return res.status(400).json({ error: "Positions array is required" });
+      return res.status(400).json({ success: false, error: "positions must be an array." });
     }
     if (positions.length === 0) {
-      return res.status(400).json({ error: "Positions array must not be empty" });
+      return res.status(400).json({ success: false, error: "positions array must not be empty." });
     }
     if (positions.length > MAX_BATCH_SIZE) {
       return res.status(400).json({
+        success: false,
         error: `Batch size exceeds limit. Maximum is ${MAX_BATCH_SIZE} positions, received ${positions.length}.`,
       });
     }
-
+ 
+    // Validate every FEN up-front and return a clear error before touching the engine.
+    const validationErrors: Array<{ index: number; error: string }> = [];
+    for (let i = 0; i < positions.length; i++) {
+      const err = validateFen(positions[i]?.fen);
+      if (err) validationErrors.push({ index: i, error: err });
+    }
+    if (validationErrors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: "One or more positions contain an invalid FEN.",
+        validationErrors,
+      });
+    }
+ 
     const defaultDepth = clampDepth(req.body.depth);
-
+ 
+    // Batch cache keys always use the original FEN + nullMove so the stored
+    // result is never ambiguous (batch doesn't support nullMove currently, so
+    // we default to false to keep the door open for future extension).
     const keys = positions.map((p) => ({
       fen: p.fen as string,
       depth: clampDepth(p.depth, defaultDepth),
       multiPv: validateMultiPv(p.multiPv),
+      nullMove: false as const,
     }));
-
-    // Validate all FENs are present
-    for (let i = 0; i < keys.length; i++) {
-      if (!keys[i].fen) {
-        return res.status(400).json({ error: `Position at index ${i} is missing a FEN` });
-      }
-    }
-
+ 
     const cacheResults = await cacheGetBatch(keys);
-
+ 
     const results: Array<{ fen: string; result: object; cache: { hit: boolean } }> = new Array(positions.length);
     const missIndices: number[] = [];
-
+ 
     for (let i = 0; i < cacheResults.length; i++) {
       const cr = cacheResults[i];
       if (cr.hit && cr.result) {
-        results[i] = { fen: cr.fen, result: formatStockfishPositionEval(cr.fen, cr.result, undefined), cache: { hit: true } };
+        results[i] = {
+          fen: cr.fen,
+          result: formatStockfishPositionEval(cr.fen, cr.result, false),
+          cache: { hit: true },
+        };
       } else {
         missIndices.push(i);
       }
     }
-
+ 
     if (missIndices.length > 0) {
       engine = await enginePool.getEngine();
-      const newEntries: Array<{ key: { fen: string; depth: number; multiPv: number }; result: PositionEval }> = [];
-
+      const newEntries: Array<{ key: typeof keys[number]; result: PositionEval }> = [];
+ 
       for (const idx of missIndices) {
         const { fen, depth: d, multiPv: pv } = keys[idx];
         const raw = await engine.evaluatePositionWithUpdate({ fen, depth: d, multiPv: pv });
-        results[idx] = { fen, result: formatStockfishPositionEval(fen, raw, undefined), cache: { hit: false } };
-        newEntries.push({ key: { fen, depth: d, multiPv: pv }, result: raw });
+        results[idx] = { fen, result: formatStockfishPositionEval(fen, raw, false), cache: { hit: false } };
+        newEntries.push({ key: keys[idx], result: raw });
       }
-
+ 
       cacheSetBatch(newEntries, "batch").catch(() => {});
     }
-
+ 
     return res.json({
       success: true,
       results,
@@ -193,21 +235,22 @@ app.post("/analyze-batch", async (req, res) => {
     if (engine) enginePool.releaseEngine(engine);
   }
 });
-
-// ─── /bestmove ────────────────────────────────────────────────────────────────
-
+ 
+ 
 app.post("/bestmove", async (req, res) => {
   let engine: MCPStockfish | null = null;
   try {
     const { fen, nullMove = false } = req.body;
-    if (!fen) return res.status(400).json({ error: "FEN is required" });
-
+ 
+    const fenError = validateFen(fen);
+    if (fenError) return res.status(400).json({ success: false, error: fenError });
+ 
     const depth = clampDepth(req.body.depth);
     const evalFen = flipNullMoveFen(fen, nullMove);
     engine = await enginePool.getEngine();
     const result = await engine.evaluatePositionWithUpdate({ fen: evalFen, depth, multiPv: 1 });
     const cleanedResult = formatStockfishPositionEval(evalFen, result, nullMove);
-
+ 
     return res.json({ success: true, bestMove: cleanedResult.bestmove, evaluation: formatEvaluation(result.lines[0]) });
   } catch (error) {
     console.error("Best move error:", error);
@@ -216,40 +259,43 @@ app.post("/bestmove", async (req, res) => {
     if (engine) enginePool.releaseEngine(engine);
   }
 });
-
-// ─── /book ───────────────────────────────────────────────────────────────────
-
+ 
+ 
 app.post("/book", async (req, res) => {
   try {
     const { fen } = req.body;
-    if (!fen) return res.status(400).json({ error: "FEN is required" });
+ 
+    const fenError = validateFen(fen);
+    if (fenError) return res.status(400).json({ success: false, error: fenError });
+ 
     return res.json({ success: true, book: checkFenInAllDatabases(fen) });
   } catch (error) {
     return res.status(500).json({ success: false, error: error instanceof Error ? error.message : "Unknown error" });
   }
 });
-
-// ─── /expandqueue ────────────────────────────────────────────────────────────
-
+ 
+ 
 app.post("/expandqueue", async (req, res) => {
   try {
     const { fen, expansionDepth, expansionWidth, maxPositionsQueued } = req.body;
-    if (!fen) return res.status(400).json({ error: "FEN is required" });
-
+ 
+    const fenError = validateFen(fen);
+    if (fenError) return res.status(400).json({ success: false, error: fenError });
+ 
     const toPositiveInt = (v: unknown, label: string, max: number) => {
       if (v === undefined) return undefined;
       const n = Number(v);
       if (isNaN(n) || n < 1 || !Number.isInteger(n)) throw new Error(`${label} must be a positive integer (max ${max})`);
       return n;
     };
-
+ 
     const result = await expandQueueService.expand({
       fen,
       expansionDepth: toPositiveInt(expansionDepth, "expansionDepth", 10),
       expansionWidth: toPositiveInt(expansionWidth, "expansionWidth", 5),
       maxPositionsQueued: toPositiveInt(maxPositionsQueued, "maxPositionsQueued", 20),
     });
-
+ 
     return res.json({
       success: result.success,
       positionsVisited: result.positionsVisited,
@@ -263,26 +309,31 @@ app.post("/expandqueue", async (req, res) => {
     return res.status(msg.includes("must be") ? 400 : 500).json({ success: false, error: msg });
   }
 });
-
+ 
 app.get("/expandqueue/stream", async (req, res) => {
   try {
     const { fen, expansionDepth, expansionWidth, maxPositionsQueued } = req.query;
-    if (!fen || typeof fen !== "string") return res.status(400).json({ error: "fen query param is required" });
-
+ 
+    const fenError = validateFen(fen);
+    if (fenError) return res.status(400).json({ success: false, error: fenError });
+ 
     const toPositiveInt = (v: unknown, label: string, max: number) => {
       if (v === undefined) return undefined;
       const n = Number(v);
       if (isNaN(n) || n < 1 || !Number.isInteger(n)) throw new Error(`${label} must be a positive integer (max ${max})`);
       return n;
     };
-
+ 
     req.on("close", () => res.end());
-    await expandQueueService.expandStream({
-      fen,
-      expansionDepth: toPositiveInt(expansionDepth, "expansionDepth", 10),
-      expansionWidth: toPositiveInt(expansionWidth, "expansionWidth", 5),
-      maxPositionsQueued: toPositiveInt(maxPositionsQueued, "maxPositionsQueued", 20),
-    }, res);
+    await expandQueueService.expandStream(
+      {
+        fen: fen as string,
+        expansionDepth: toPositiveInt(expansionDepth, "expansionDepth", 10),
+        expansionWidth: toPositiveInt(expansionWidth, "expansionWidth", 5),
+        maxPositionsQueued: toPositiveInt(maxPositionsQueued, "maxPositionsQueued", 20),
+      },
+      res
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     if (!res.headersSent) {
@@ -293,8 +344,7 @@ app.get("/expandqueue/stream", async (req, res) => {
     }
   }
 });
-
-// ─── Start ────────────────────────────────────────────────────────────────────
-
+ 
+ 
 const PORT = process.env.PORT || 8081;
 app.listen(PORT, () => console.log(`Stockfish API running on port ${PORT}`));

@@ -5,12 +5,15 @@ export interface CacheKey {
   fen: string;
   depth: number;
   multiPv: number;
+  /** Whether this result was evaluated after flipping the side-to-move (null-move trick). */
+  nullMove?: boolean;
 }
 
 export interface CachedEvalDocument {
   fen: string;
   depth: number;
   multiPv: number;
+  nullMove: boolean;
   result: PositionEval;
   createdAt: string;
   lastAccessedAt: string;
@@ -36,15 +39,17 @@ export function normaliseFen(fen: string): string {
 
 function buildDocId(key: CacheKey): string {
   const fenPart = normaliseFen(key.fen).replace(/\//g, "|").replace(/ /g, "_");
-  return `${fenPart}__d${key.depth}__pv${key.multiPv}`;
+  // Include nullMove in the doc ID so a flipped evaluation never collides with
+  // a normal evaluation of the same FEN.
+  const nmSuffix = key.nullMove ? "__nm1" : "__nm0";
+  return `${fenPart}__d${key.depth}__pv${key.multiPv}${nmSuffix}`;
 }
-
 
 function sanitize(result: PositionEval): PositionEval {
   return JSON.parse(JSON.stringify(result));
 }
 
-/** Returns the cached PositionEval or null on a miss. Bumps hit stats async. */
+/** Returns the cached PositionEval or null on a miss. */
 export async function cacheGet(key: CacheKey): Promise<PositionEval | null> {
   try {
     const docId = buildDocId(key);
@@ -67,6 +72,7 @@ export async function cacheSet(key: CacheKey, result: PositionEval, source: stri
       fen: normaliseFen(key.fen),
       depth: key.depth,
       multiPv: key.multiPv,
+      nullMove: key.nullMove ?? false,
       result: sanitize(result),
       createdAt: now,
       lastAccessedAt: now,
@@ -134,6 +140,7 @@ export async function cacheSetBatch(
           fen: normaliseFen(key.fen),
           depth: key.depth,
           multiPv: key.multiPv,
+          nullMove: key.nullMove ?? false,
           result: sanitize(result),
           createdAt: now,
           lastAccessedAt: now,
