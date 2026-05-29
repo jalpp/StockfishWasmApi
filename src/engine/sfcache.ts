@@ -28,9 +28,21 @@ export interface BatchCacheResult {
 
 const COLLECTION = "sf_cache";
 
-const db = new Firestore({
-  projectId: process.env.FIRESTORE_PROJECT_ID,
-});
+const DISABLE_FIRESTORE_CACHE = (() => {
+  const v = process.env.DEV ?? process.env.DISABLE_FIRESTORE_CACHE;
+  if (v === undefined || v === null) return false;
+  const s = String(v).toLowerCase();
+  return s === "1" || s === "true";
+})();
+
+if (DISABLE_FIRESTORE_CACHE) {
+  console.log("[sfCache] Firestore cache disabled (DEV mode).");
+}
+
+let db: Firestore | null = null;
+if (!DISABLE_FIRESTORE_CACHE) {
+  db = new Firestore({ projectId: process.env.FIRESTORE_PROJECT_ID });
+}
 
 /** Strip half-move clock and full-move number so logically identical positions share a key. */
 export function normaliseFen(fen: string): string {
@@ -51,9 +63,10 @@ function sanitize(result: PositionEval): PositionEval {
 
 /** Returns the cached PositionEval or null on a miss. */
 export async function cacheGet(key: CacheKey): Promise<PositionEval | null> {
+  if (DISABLE_FIRESTORE_CACHE) return null;
   try {
     const docId = buildDocId(key);
-    const snap = await db.collection(COLLECTION).doc(docId).get();
+    const snap = await db!.collection(COLLECTION).doc(docId).get();
     if (!snap.exists) return null;
 
     return (snap.data() as CachedEvalDocument).result;
@@ -65,6 +78,10 @@ export async function cacheGet(key: CacheKey): Promise<PositionEval | null> {
 
 /** Writes a PositionEval to the cache. Non-fatal on error. */
 export async function cacheSet(key: CacheKey, result: PositionEval, source: string): Promise<void> {
+  if (DISABLE_FIRESTORE_CACHE) {
+    // No-op in dev mode
+    return;
+  }
   try {
     const docId = buildDocId(key);
     const now = new Date().toISOString();
@@ -78,7 +95,7 @@ export async function cacheSet(key: CacheKey, result: PositionEval, source: stri
       lastAccessedAt: now,
       source,
     };
-    await db.collection(COLLECTION).doc(docId).set(doc, { merge: true });
+    await db!.collection(COLLECTION).doc(docId).set(doc, { merge: true });
     console.log(`[sfCache] SET  ${docId}  (source: ${source})`);
   } catch (err) {
     console.error("[sfCache] set error:", err);
@@ -88,9 +105,13 @@ export async function cacheSet(key: CacheKey, result: PositionEval, source: stri
 /** Batch cache read — single Firestore round-trip via getAll. */
 export async function cacheGetBatch(keys: CacheKey[]): Promise<BatchCacheResult[]> {
   if (keys.length === 0) return keys.map((k) => ({ fen: k.fen, hit: false }));
+  if (DISABLE_FIRESTORE_CACHE) {
+    console.log(`[sfCache] BATCH GET skipped (DEV). ${keys.length} keys`);
+    return keys.map((k) => ({ fen: k.fen, hit: false }));
+  }
   try {
-    const refs = keys.map((k) => db.collection(COLLECTION).doc(buildDocId(k)));
-    const snaps = await db.getAll(...refs);
+    const refs = keys.map((k) => db!.collection(COLLECTION).doc(buildDocId(k)));
+    const snaps = await db!.getAll(...refs);
 
     const results: BatchCacheResult[] = [];
     const hitRefs: FirebaseFirestore.DocumentReference[] = [];
@@ -108,7 +129,7 @@ export async function cacheGetBatch(keys: CacheKey[]): Promise<BatchCacheResult[
     console.log(`[sfCache] BATCH GET  ${keys.length} keys → ${hitRefs.length} hits / ${keys.length - hitRefs.length} misses`);
 
     if (hitRefs.length > 0) {
-      const batch = db.batch();
+      const batch = db!.batch();
       const now = new Date().toISOString();
       for (const ref of hitRefs) {
         batch.update(ref, { hitCount: FieldValue.increment(1), lastAccessedAt: now });
@@ -129,12 +150,16 @@ export async function cacheSetBatch(
   source: string
 ): Promise<void> {
   if (entries.length === 0) return;
+  if (DISABLE_FIRESTORE_CACHE) {
+    console.log(`[sfCache] BATCH SET skipped (DEV). ${entries.length} entries`);
+    return;
+  }
   try {
     const CHUNK_SIZE = 500;
     const now = new Date().toISOString();
     for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
       const chunk = entries.slice(i, i + CHUNK_SIZE);
-      const batch = db.batch();
+      const batch = db!.batch();
       for (const { key, result } of chunk) {
         const doc: CachedEvalDocument = {
           fen: normaliseFen(key.fen),
@@ -146,7 +171,7 @@ export async function cacheSetBatch(
           lastAccessedAt: now,
           source,
         };
-        batch.set(db.collection(COLLECTION).doc(buildDocId(key)), doc, { merge: true });
+        batch.set(db!.collection(COLLECTION).doc(buildDocId(key)), doc, { merge: true });
       }
       await batch.commit();
       console.log(`[sfCache] BATCH SET  ${chunk.length} entries  (source: ${source})`);

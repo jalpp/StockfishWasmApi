@@ -3,7 +3,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "dev": "cross-env DEV=true npm run start",
+    "clean": "rm -rf dist"
   },
   "dependencies": {
     "@google-cloud/firestore": "^8.6.0",
@@ -11,12 +13,14 @@
     "chess.js": "^1.4.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
-    "stockfish": "^18.0.7"
+    "stockfish": "^18.0.7",
+    "void57-chess": "^1.0.4"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^25.8.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "cross-env": "^7.0.3"
   }
 }
