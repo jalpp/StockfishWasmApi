@@ -296,3 +296,20 @@ export interface Variation {
   name: string;
   moves: string[];
 }
+
+
+export interface LegalMoveResult {
+  data?: {
+    isLegal: boolean;
+    message: string;
+  };
+  error?: string;
+}
+
+export interface BoardStateResult {
+  data?: {
+    state: any;
+    description: string;
+  };
+  error?: string;
+}

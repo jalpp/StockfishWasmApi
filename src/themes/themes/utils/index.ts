@@ -51,3 +51,13 @@ export function chessValidateBuilder(is960: boolean, fen: string) {
   };
 }
 
+export function parseMovesForEndingState(rootFen: string, moves: string[], is960: boolean) {
+  const chess = chessFromFenBuilder(rootFen, is960);
+
+  for(let i = 0; i < moves.length; i++){
+    chess.move(moves[i]);
+  }
+
+  return chess.fen();
+}
+

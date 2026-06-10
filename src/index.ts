@@ -10,6 +10,7 @@ import { PositionEval } from "./engine/engine.js";
 import { cacheGet, cacheSet, cacheGetBatch, cacheSetBatch } from "./engine/sfcache.js";
 import { validateFen as vfen } from "chess.js";
 import { ThemeAnalysisService } from "./themes/service.js";
+import { BoardStateService } from "./themes/boardService.js";
 
 const app = express();
 app.use(cors());
@@ -18,6 +19,7 @@ app.use(express.json());
 const enginePool = new EnginePool();
 const expandQueueService = new ExpandQueueService();
 const themeService = new ThemeAnalysisService();
+const boardService = new BoardStateService();
 
 
 
@@ -80,6 +82,62 @@ function respondWithThemeResult(res: any, result: any) {
   }
   return res.json({ success: true, data: result?.data });
 }
+
+function registerBoardRoutes(prefix: string) {
+  app.post(`${prefix}/check-legal-move`, (req, res) => {
+    const { fen, move, is960 = false } = req.body;
+
+    const fenError = validateFen(fen);
+    if (fenError) {
+      return res.status(400).json({ success: false, error: fenError });
+    }
+
+    const result = boardService.checkLegalMove(fen, move, Boolean(is960));
+    return respondWithThemeResult(res, result);
+  });
+
+  app.post(`${prefix}/state-for-move`, (req, res) => {
+    const { fen, move, is960 = false } = req.body;
+
+    const fenError = validateFen(fen);
+    if (fenError) {
+      return res.status(400).json({ success: false, error: fenError });
+    }
+
+    const result = boardService.getBoardStateForMove(fen, move, Boolean(is960));
+    return respondWithThemeResult(res, result);
+  });
+
+  app.post(`${prefix}/state-for-fen`, (req, res) => {
+    const { fen, is960 = false } = req.body;
+
+    const fenError = validateFen(fen);
+    if (fenError) {
+      return res.status(400).json({ success: false, error: fenError });
+    }
+
+    const result = boardService.getBoardStateForFen(fen, Boolean(is960));
+    return respondWithThemeResult(res, result);
+  });
+
+  app.post(`${prefix}/ending-state`, (req, res) => {
+    const { fen, moves, is960 = false } = req.body;
+
+    const fenError = validateFen(fen);
+    if (fenError) {
+      return res.status(400).json({ success: false, error: fenError });
+    }
+
+    if (!Array.isArray(moves) || !moves.every((move) => typeof move === "string")) {
+      return res.status(400).json({ success: false, error: "moves must be an array of strings." });
+    }
+
+    const result = boardService.getEndingBoardStateForMoves(fen, moves, Boolean(is960));
+    return respondWithThemeResult(res, result);
+  });
+}
+
+registerBoardRoutes("/board");
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
  
