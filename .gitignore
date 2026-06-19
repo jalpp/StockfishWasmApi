@@ -30,4 +30,6 @@ lerna-debug.log*
 
 .vercel
 
+agine.postman_collection.json
+
 dist
