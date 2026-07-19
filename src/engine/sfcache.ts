@@ -1,5 +1,5 @@
 import { Firestore, FieldValue } from "@google-cloud/firestore";
-import { PositionEval } from "./engine.js";
+import { PositionEval } from "@jalpp/stockfishts";
 
 export interface CacheKey {
   fen: string;

@@ -1,47 +1,18 @@
 import { Chess } from 'chess.js';
-import { ChessDBService } from './chessdb.js';
+import { ChessDbApi } from '@jalpp/stockfishts';
 import { Response } from 'express';
+import { MAX_EXPANSION_DEPTH, MAX_EXPANSION_WIDTH, MAX_POSITIONS_QUEUED, ExpandQueueRequest, ExpandQueueResult, BfsNode, ExpandQueueEvent } from './types.js';
 
-const MAX_POSITIONS_QUEUED = 20;
-const MAX_EXPANSION_DEPTH  = 10;
-const MAX_EXPANSION_WIDTH  = 5;
-
-export interface ExpandQueueRequest {
-  fen: string;
-  expansionDepth?:     number;
-  expansionWidth?:     number;
-  maxPositionsQueued?: number;
-}
-
-export interface ExpandQueueResult {
-  success:          boolean;
-  positionsVisited: number;
-  positionsQueued:  number;
-  cappedByLimit:    boolean;
-  queuedFens:       string[];  // every FEN successfully sent to ChessDB
-  errors:           string[];
-}
-
-export type ExpandQueueEvent =
-  | { event: 'progress'; fen: string; depth: number; positionsVisited: number; positionsQueued: number; frontierSize: number }
-  | { event: 'queued';   fen: string; positionsQueued: number }
-  | { event: 'error';    message: string }
-  | { event: 'done';     result: ExpandQueueResult };
-
-interface BfsNode {
-  fen:   string;
-  depth: number;
-}
 
 function sseWrite(res: Response, payload: ExpandQueueEvent): void {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
 export class ExpandQueueService {
-  private chessdb: ChessDBService;
+  private chessdb: ChessDbApi;
 
   constructor() {
-    this.chessdb = new ChessDBService();
+    this.chessdb = new ChessDbApi();
   }
 
   async expandStream(req: ExpandQueueRequest, res: Response): Promise<void> {
@@ -89,20 +60,20 @@ export class ExpandQueueService {
         });
       }
 
-      const analysis = await this.chessdb.getAnalysis(fen);
+      const analysis = await this.chessdb.queryAll(fen);
 
-      if (analysis.error || !analysis.data || analysis.data.moves.length === 0) {
+      if (!analysis.success) {
         if (positionsQueued >= maxPositionsQueued) {
           cappedByLimit = true;
           break outerLoop;
         }
-        const qr = await this.chessdb.queueAnalysis(fen);
+        const qr = await this.chessdb.queue(fen);
         if (qr.success) {
           positionsQueued++;
           queuedFens.push(fen);
           if (res) sseWrite(res, { event: 'queued', fen, positionsQueued });
         } else {
-          const msg = `Queue failed for unknown position ${fen}: ${qr.error}`;
+          const msg = `Queue failed for unknown position ${fen}`;
           errors.push(msg);
           if (res) sseWrite(res, { event: 'error', message: msg });
         }
@@ -110,7 +81,7 @@ export class ExpandQueueService {
       }
 
       const isLeaf   = depth >= expansionDepth;
-      const topMoves = analysis.data.moves.slice(0, expansionWidth);
+      const topMoves = analysis.data.slice(0, expansionWidth);
 
       for (const move of topMoves) {
         const childFen = this.applyUciMove(fen, move.uci);
@@ -121,13 +92,13 @@ export class ExpandQueueService {
             cappedByLimit = true;
             break outerLoop;
           }
-          const qr = await this.chessdb.queueAnalysis(childFen);
+          const qr = await this.chessdb.queue(childFen);
           if (qr.success) {
             positionsQueued++;
             queuedFens.push(childFen);
             if (res) sseWrite(res, { event: 'queued', fen: childFen, positionsQueued });
           } else {
-            const msg = `Queue failed for ${childFen}: ${qr.error}`;
+            const msg = `Queue failed for ${childFen}`;
             errors.push(msg);
             if (res) sseWrite(res, { event: 'error', message: msg });
           }

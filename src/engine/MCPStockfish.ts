@@ -1,7 +1,4 @@
-// MCPStockfish.ts
-import { EngineWorker } from "./EngineWorker.js";
-import { EngineName } from "./engine.js";
-import { UciEngine } from "./UciEngine.js";
+import { EngineWorker, EngineName, UciEngine } from "@jalpp/stockfishts";
 import { StockfishProcess } from "./stockfishprocess.js";
 
 async function createStockfishEngineWorker(): Promise<EngineWorker> {

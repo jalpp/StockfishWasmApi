@@ -1,4 +1,4 @@
-import { LineEval, PositionEval } from "./engine.js";
+import { LineEval, PositionEval } from "@jalpp/stockfishts";
 import { Chess } from "chess.js";
 
 interface FormatResponse {

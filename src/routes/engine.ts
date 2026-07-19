@@ -3,7 +3,7 @@ import { MCPStockfish } from "../engine/MCPStockfish.js";
 import { EnginePool } from "../engine/pool.js";
 import { formatEvaluation, formatStockfishPositionEval } from "../engine/format.js";
 import { flipNullMoveFen } from "../engine/parseResults.js";
-import { PositionEval } from "../engine/engine.js";
+import { PositionEval } from "@jalpp/stockfishts";
 import { cacheGet, cacheSet, cacheGetBatch, cacheSetBatch } from "../engine/sfcache.js";
 import { clampDepth, validateMultiPv, validateFen, MAX_BATCH_SIZE } from "./utils.js";
 
