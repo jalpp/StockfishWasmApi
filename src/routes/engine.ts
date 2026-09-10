@@ -34,7 +34,7 @@ export function registerEngineRoutes(app: Express, enginePool: EnginePool) {
       engine = await enginePool.getEngine();
       const result = await engine.evaluatePositionWithUpdate({ fen: evalFen, depth, multiPv });
 
-      cacheSet(cacheKey, result, "evaluate").catch(() => {});
+      //cacheSet(cacheKey, result, "evaluate").catch(() => {});
 
       return res.json({
         success: true,
@@ -71,7 +71,7 @@ export function registerEngineRoutes(app: Express, enginePool: EnginePool) {
       engine = await enginePool.getEngine();
       const result = await engine.evaluatePositionWithUpdate({ fen: evalFen, depth, multiPv });
 
-      cacheSet(cacheKey, result, "positioneval").catch(() => {});
+      //cacheSet(cacheKey, result, "positioneval").catch(() => {});
 
       return res.json({ success: true, data: result, cache: { hit: false } });
     } catch (error) {
@@ -154,7 +154,7 @@ export function registerEngineRoutes(app: Express, enginePool: EnginePool) {
           newEntries.push({ key: keys[idx], result: raw });
         }
 
-        cacheSetBatch(newEntries, "batch").catch(() => {});
+        //cacheSetBatch(newEntries, "batch").catch(() => {});
       }
 
       return res.json({
