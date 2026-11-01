@@ -1,5 +1,5 @@
 {
-  "name": "express",
+  "name": "agine-backend",
   "type": "module",
   "scripts": {
     "build": "tsc",
@@ -11,13 +11,13 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "@google-cloud/firestore": "^9.1.0",
-    "@jalpp/stockfishts": "^1.0.1",
+    "@google-cloud/firestore": "^9.4.0",
+    "@jalpp/stockfishts": "^1.1.0",
     "async-mutex": "^0.5.0",
     "chess.js": "^1.4.0",
     "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "stockfish": "^18.0.8",
+    "express": "^5.3.0",
+    "stockfish": "^19.0.1",
     "void57-chess": "^1.0.4"
   },
   "devDependencies": {
@@ -25,12 +25,12 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^29.5.11",
-    "@types/node": "^22.20.2",
+    "@types/node": "^22.20.5",
     "@types/supertest": "^6.0.2",
     "cross-env": "^7.0.3",
     "jest": "^29.7.0",
     "supertest": "^6.3.3",
-    "ts-jest": "^29.1.1",
+    "ts-jest": "^29.4.14",
     "typescript": "^5.9.3"
   }
 }
