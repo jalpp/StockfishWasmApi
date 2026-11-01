@@ -1,12 +1,10 @@
 import { Chess } from 'chess.js';
 import { ChessDbApi } from '@jalpp/stockfishts';
 import { Response } from 'express';
+import { sseWrite } from './helper.js';
 import { MAX_EXPANSION_DEPTH, MAX_EXPANSION_WIDTH, MAX_POSITIONS_QUEUED, ExpandQueueRequest, ExpandQueueResult, BfsNode, ExpandQueueEvent } from './types.js';
 
 
-function sseWrite(res: Response, payload: ExpandQueueEvent): void {
-  res.write(`data: ${JSON.stringify(payload)}\n\n`);
-}
 
 export class ExpandQueueService {
   private chessdb: ChessDbApi;
@@ -36,7 +34,7 @@ export class ExpandQueueService {
     let positionsQueued  = 0;
     let cappedByLimit    = false;
     const errors:     string[] = [];
-    const queuedFens: string[] = [];  // accumulates every successfully queued FEN
+    const queuedFens: string[] = []; 
 
     const visited  = new Set<string>();
     const frontier: BfsNode[] = [{ fen: req.fen, depth: 0 }];

@@ -1,4 +1,4 @@
-import { MCPStockfish } from "./MCPStockfish.js";
+import { MCPStockfish } from "./BackendStockfish.js";
 
 (async () => {
     const engine = await MCPStockfish.create();

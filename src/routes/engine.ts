@@ -1,10 +1,10 @@
 import { Express } from "express";
-import { MCPStockfish } from "../engine/MCPStockfish.js";
+import { MCPStockfish } from "../engine/BackendStockfish.js";
 import { EnginePool } from "../engine/pool.js";
 import { formatEvaluation, formatStockfishPositionEval } from "../engine/format.js";
 import { flipNullMoveFen } from "../engine/parseResults.js";
 import { PositionEval } from "@jalpp/stockfishts";
-import { cacheGet, cacheSet, cacheGetBatch, cacheSetBatch } from "../engine/sfcache.js";
+import { cacheGet, cacheGetBatch} from "../engine/sfcache.js";
 import { clampDepth, validateMultiPv, validateFen, MAX_BATCH_SIZE } from "./utils.js";
 
 export function registerEngineRoutes(app: Express, enginePool: EnginePool) {
@@ -33,8 +33,6 @@ export function registerEngineRoutes(app: Express, enginePool: EnginePool) {
 
       engine = await enginePool.getEngine();
       const result = await engine.evaluatePositionWithUpdate({ fen: evalFen, depth, multiPv });
-
-      //cacheSet(cacheKey, result, "evaluate").catch(() => {});
 
       return res.json({
         success: true,
@@ -71,8 +69,6 @@ export function registerEngineRoutes(app: Express, enginePool: EnginePool) {
       engine = await enginePool.getEngine();
       const result = await engine.evaluatePositionWithUpdate({ fen: evalFen, depth, multiPv });
 
-      //cacheSet(cacheKey, result, "positioneval").catch(() => {});
-
       return res.json({ success: true, data: result, cache: { hit: false } });
     } catch (error) {
       console.error("Evaluation error:", error);
@@ -99,7 +95,6 @@ export function registerEngineRoutes(app: Express, enginePool: EnginePool) {
         });
       }
 
-      // Validate every FEN up-front and return a clear error before touching the engine.
       const validationErrors: Array<{ index: number; error: string }> = [];
       for (let i = 0; i < positions.length; i++) {
         const err = validateFen(positions[i]?.fen);
@@ -115,9 +110,6 @@ export function registerEngineRoutes(app: Express, enginePool: EnginePool) {
 
       const defaultDepth = clampDepth(req.body.depth);
 
-      // Batch cache keys always use the original FEN + nullMove so the stored
-      // result is never ambiguous (batch doesn't support nullMove currently, so
-      // we default to false to keep the door open for future extension).
       const keys = positions.map((p) => ({
         fen: p.fen as string,
         depth: clampDepth(p.depth, defaultDepth),
@@ -154,7 +146,6 @@ export function registerEngineRoutes(app: Express, enginePool: EnginePool) {
           newEntries.push({ key: keys[idx], result: raw });
         }
 
-        //cacheSetBatch(newEntries, "batch").catch(() => {});
       }
 
       return res.json({

@@ -1,69 +1,26 @@
 import { Firestore, FieldValue } from "@google-cloud/firestore";
 import { PositionEval } from "@jalpp/stockfishts";
+import { BatchCacheResult, CachedEvalDocument, CacheKey } from "./types.js";
+import { sanitizePositionEval } from "./helper.js";
+import { buildDocId, normaliseFen } from "./helper.js";
+import { getFireStoreCache } from "./helper.js";
+import { COLLECTION } from "./helper.js";
 
-export interface CacheKey {
-  fen: string;
-  depth: number;
-  multiPv: number;
-  /** Whether this result was evaluated after flipping the side-to-move (null-move trick). */
-  nullMove?: boolean;
-}
+const DISABLED_CACHE = getFireStoreCache();
 
-export interface CachedEvalDocument {
-  fen: string;
-  depth: number;
-  multiPv: number;
-  nullMove: boolean;
-  result: PositionEval;
-  createdAt: string;
-  lastAccessedAt: string;
-  source: string;
-}
-
-export interface BatchCacheResult {
-  fen: string;
-  hit: boolean;
-  result?: PositionEval;
-}
-
-const COLLECTION = "sf_cache";
-
-const DISABLE_FIRESTORE_CACHE = (() => {
-  const v = process.env.DEV ?? process.env.DISABLE_FIRESTORE_CACHE;
-  if (v === undefined || v === null) return false;
-  const s = String(v).toLowerCase();
-  return s === "1" || s === "true";
-})();
-
-if (DISABLE_FIRESTORE_CACHE) {
+if (DISABLED_CACHE) {
   console.log("[sfCache] Firestore cache disabled (DEV mode).");
 }
 
 let db: Firestore | null = null;
-if (!DISABLE_FIRESTORE_CACHE) {
+
+if (!DISABLED_CACHE) {
   db = new Firestore({ projectId: process.env.FIRESTORE_PROJECT_ID });
 }
 
-/** Strip half-move clock and full-move number so logically identical positions share a key. */
-export function normaliseFen(fen: string): string {
-  return fen.trim().split(" ").slice(0, 4).join(" ");
-}
 
-function buildDocId(key: CacheKey): string {
-  const fenPart = normaliseFen(key.fen).replace(/\//g, "|").replace(/ /g, "_");
-  // Include nullMove in the doc ID so a flipped evaluation never collides with
-  // a normal evaluation of the same FEN.
-  const nmSuffix = key.nullMove ? "__nm1" : "__nm0";
-  return `${fenPart}__d${key.depth}__pv${key.multiPv}${nmSuffix}`;
-}
-
-function sanitize(result: PositionEval): PositionEval {
-  return JSON.parse(JSON.stringify(result));
-}
-
-/** Returns the cached PositionEval or null on a miss. */
 export async function cacheGet(key: CacheKey): Promise<PositionEval | null> {
-  if (DISABLE_FIRESTORE_CACHE) return null;
+  if (DISABLED_CACHE) return null;
   try {
     const docId = buildDocId(key);
     const snap = await db!.collection(COLLECTION).doc(docId).get();
@@ -76,10 +33,8 @@ export async function cacheGet(key: CacheKey): Promise<PositionEval | null> {
   }
 }
 
-/** Writes a PositionEval to the cache. Non-fatal on error. */
 export async function cacheSet(key: CacheKey, result: PositionEval, source: string): Promise<void> {
-  if (DISABLE_FIRESTORE_CACHE) {
-    // No-op in dev mode
+  if (DISABLED_CACHE) {
     return;
   }
   try {
@@ -90,7 +45,7 @@ export async function cacheSet(key: CacheKey, result: PositionEval, source: stri
       depth: key.depth,
       multiPv: key.multiPv,
       nullMove: key.nullMove ?? false,
-      result: sanitize(result),
+      result: sanitizePositionEval(result),
       createdAt: now,
       lastAccessedAt: now,
       source,
@@ -102,10 +57,13 @@ export async function cacheSet(key: CacheKey, result: PositionEval, source: stri
   }
 }
 
-/** Batch cache read — single Firestore round-trip via getAll. */
 export async function cacheGetBatch(keys: CacheKey[]): Promise<BatchCacheResult[]> {
-  if (keys.length === 0) return keys.map((k) => ({ fen: k.fen, hit: false }));
-  if (DISABLE_FIRESTORE_CACHE) {
+  
+  if (keys.length === 0) {
+    return keys.map((k) => ({ fen: k.fen, hit: false }));
+  }
+
+  if (DISABLED_CACHE) {
     console.log(`[sfCache] BATCH GET skipped (DEV). ${keys.length} keys`);
     return keys.map((k) => ({ fen: k.fen, hit: false }));
   }
@@ -144,13 +102,12 @@ export async function cacheGetBatch(keys: CacheKey[]): Promise<BatchCacheResult[
   }
 }
 
-/** Batch cache write — auto-chunks at 500 for Firestore limits. */
 export async function cacheSetBatch(
   entries: Array<{ key: CacheKey; result: PositionEval }>,
   source: string
 ): Promise<void> {
   if (entries.length === 0) return;
-  if (DISABLE_FIRESTORE_CACHE) {
+  if (DISABLED_CACHE) {
     console.log(`[sfCache] BATCH SET skipped (DEV). ${entries.length} entries`);
     return;
   }
@@ -166,7 +123,7 @@ export async function cacheSetBatch(
           depth: key.depth,
           multiPv: key.multiPv,
           nullMove: key.nullMove ?? false,
-          result: sanitize(result),
+          result: sanitizePositionEval(result),
           createdAt: now,
           lastAccessedAt: now,
           source,

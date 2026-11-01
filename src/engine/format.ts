@@ -1,18 +1,6 @@
 import { LineEval, PositionEval } from "@jalpp/stockfishts";
 import { Chess } from "chess.js";
-
-interface FormatResponse {
-    bestmove: string;
-    lines: string[];
-    isNullMovePosition?: boolean;
-}
-
-export interface EvaluationRequest {
-    fen: string;
-    depth: number;
-    multiPv?: number;
-}
-
+import { FormatResponse } from "./types.js";
 
 export const formatStockfishPositionEval = (fen: string, data: PositionEval, isNullMove: boolean | undefined): FormatResponse => {
 

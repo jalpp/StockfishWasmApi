@@ -11,14 +11,14 @@ export class StockfishProcess {
     constructor() {
         const enginePath = path.join(
             __dirname,
-            "../../node_modules/stockfish/bin/stockfish-18-lite.js"
+            "../../node_modules/stockfish/bin/stockfish-19-lite-single.js"
         );
 
         this.engine = spawn(process.execPath, [enginePath], { 
             stdio: "pipe",
             env: {
                 ...process.env,
-                NODE_ENV: "production", // reduce noise
+                NODE_ENV: "production", 
             },
         });
 
@@ -57,14 +57,14 @@ export class StockfishProcess {
         ];
 
         const invalidPatterns = [
-            /^\d{4}-\d{2}-\d{2}/, // timestamps
+            /^\d{4}-\d{2}-\d{2}/, 
             /\[info\]/i,
             /\[error\]/i,
             /appVersion/i,
             /isPackaged/i,
             /Checking for updates/i,
             /Starting app/i,
-            /^[\s{}\[\]]*$/, // braces or whitespace only
+            /^[\s{}\[\]]*$/, 
         ];
 
         for (const pattern of invalidPatterns) {
